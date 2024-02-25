@@ -3,6 +3,8 @@ import json
 import keyboards
 from config import TOKEN_TG
 import telebot
+import logging
+from time import sleep
 from telebot import types
 from get_info_from_vk import search_for_tommorow_passenger, \
     search_for_today_passenger, search_for_today_driver, search_for_tommorow_driver
@@ -52,16 +54,18 @@ def get_data_from_json(id):
 
 
 def make_sendable(data):
+  if data == None:
+    return ''
+  else:
     for_send = ''
     for elem in data[:10]:
-        for_send += f'Дата публикации: {elem["published_date"].strftime("%d/%m - %H:%M")}\n'
-        updated_text = re.sub(r'\b8(?=\d{10}\b)', r'+7', elem["text"])
-        for_send += f"{updated_text}\n"
-        for_send += f'Ссылка на человека: {elem["link_to_publisher"]}'
-        for_send += '\n\n'
-
-
+      for_send += f'Дата публикации: {elem["published_date"].strftime("%d/%m - %H:%M")}\n'
+      updated_text = re.sub(r'\b8(?=\d{10}\b)', r'+7', elem["text"])
+      for_send += f"{updated_text}\n"
+      for_send += f'Ссылка на человека: {elem["link_to_publisher"]}'
+      for_send += '\n\n'
     return for_send
+
 
 @bot.message_handler(commands=['start'])
 def start_handler(message):
@@ -137,67 +141,68 @@ def chose_exact_time(message):
 
 
 def final_handler(message):
-    update_json(message.chat.id, 'time', message.text)
-    data_of_user = get_data_from_json(message.chat.id)
-    if data_of_user['action'] == 'Я ищу машину (водителя)':
-        if data_of_user['day'] == 'today':
-            data = search_for_today_passenger(data_of_user['time'], data_of_user['dest'])
-            data = make_sendable(data)
-            if len(data) != 0:
-                bot.send_message(message.chat.id, data)
-                bot.send_message(message.chat.id, 'Надеюсь, смог вам помочь!', reply_markup=keyboards.kb_again)
+    pattern = '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+    if re.match(pattern, message.text):
+        update_json(message.chat.id, 'time', message.text)
+        data_of_user = get_data_from_json(message.chat.id)
+        if data_of_user['action'] == 'Я ищу машину (водителя)':
+            if data_of_user['day'] == 'today':
+                data = search_for_today_passenger(data_of_user['time'], data_of_user['dest'])
+                data = make_sendable(data)
+                if len(data) != 0:
+                    bot.send_message(message.chat.id, data)
+                    bot.send_message(message.chat.id, 'Надеюсь, смог вам помочь!', reply_markup=keyboards.kb_again)
+                else:
+                    bot.send_message(message.chat.id, 'К сожалению, я не смог найти объявлений по вашему запросу :(', reply_markup=keyboards.kb_again)
+                delete_user_from_json(message.chat.id)
+
+            elif data_of_user['day'] == 'tommorow':
+                data = search_for_tommorow_passenger(data_of_user['time'], data_of_user['dest'])
+                data = make_sendable(data)
+                print(data)
+                if len(data) != 0:
+                    bot.send_message(message.chat.id, data)
+                    bot.send_message(message.chat.id, 'Надеюсь, смог вам помочь!', reply_markup=keyboards.kb_again)
+                else:
+                    bot.send_message(message.chat.id, 'К сожалению, я не смог найти объявлений по вашему запросу :(',
+                                     reply_markup=keyboards.kb_again)
+                delete_user_from_json(message.chat.id)
             else:
-                bot.send_message(message.chat.id, 'К сожалению, я не смог найти объявлений по вашему запросу :(', reply_markup=keyboards.kb_again)
-            delete_user_from_json(message.chat.id)
+                mes = bot.send_message(message.chat.id, 'Я вас не понял\nДавайте начнём заново?',
+                                       reply_markup=keyboards.kb_again)
+                delete_user_from_json(message.chat.id)
+                bot.register_next_step_handler(mes, again_handler)
+        elif data_of_user['action'] == 'Я ищу людей (пассажиров)':
+            if data_of_user['day'] == 'today':
+                data = search_for_today_driver(data_of_user['time'], data_of_user['dest'])
+                data = make_sendable(data)
+                if len(data) != 0:
+                    bot.send_message(message.chat.id, data)
+                    bot.send_message(message.chat.id, 'Надеюсь, смог вам помочь!', reply_markup=keyboards.kb_again)
+                else:
+                    bot.send_message(message.chat.id, 'К сожалению, я не смог найти объявлений по вашему запросу :(',
+                                     reply_markup=keyboards.kb_again)
+                delete_user_from_json(message.chat.id)
 
-        elif data_of_user['day'] == 'tommorow':
-            data = search_for_tommorow_passenger(data_of_user['time'], data_of_user['dest'])
-            data = make_sendable(data)
-            print(data)
-            if len(data) != 0:
-                bot.send_message(message.chat.id, data)
-                bot.send_message(message.chat.id, 'Надеюсь, смог вам помочь!', reply_markup=keyboards.kb_again)
+            elif data_of_user['day'] == 'tommorow':
+                data = search_for_tommorow_driver(data_of_user['time'], data_of_user['dest'])
+                data = make_sendable(data)
+                print(data)
+                if len(data) != 0:
+                    bot.send_message(message.chat.id, data)
+                    bot.send_message(message.chat.id, 'Надеюсь, смог вам помочь!', reply_markup=keyboards.kb_again)
+                else:
+                    bot.send_message(message.chat.id, 'К сожалению, я не смог найти объявлений по вашему запросу :(',
+                                     reply_markup=keyboards.kb_again)
+                delete_user_from_json(message.chat.id)
             else:
-                bot.send_message(message.chat.id, 'К сожалению, я не смог найти объявлений по вашему запросу :(',
-                                 reply_markup=keyboards.kb_again)
-            delete_user_from_json(message.chat.id)
-        else:
-            mes = bot.send_message(message.chat.id, 'Я вас не понял\nДавайте начнём заново?',
-                                   reply_markup=keyboards.kb_again)
-            delete_user_from_json(message.chat.id)
-            bot.register_next_step_handler(mes, again_handler)
-
-
-    elif data_of_user['action'] == 'Я ищу людей (пассажиров)':
-        if data_of_user['day'] == 'today':
-            data = search_for_today_driver(data_of_user['time'], data_of_user['dest'])
-            data = make_sendable(data)
-            if len(data) != 0:
-                bot.send_message(message.chat.id, data)
-                bot.send_message(message.chat.id, 'Надеюсь, смог вам помочь!', reply_markup=keyboards.kb_again)
-            else:
-                bot.send_message(message.chat.id, 'К сожалению, я не смог найти объявлений по вашему запросу :(',
-                                 reply_markup=keyboards.kb_again)
-            delete_user_from_json(message.chat.id)
-
-        elif data_of_user['day'] == 'tommorow':
-            data = search_for_tommorow_driver(data_of_user['time'], data_of_user['dest'])
-            data = make_sendable(data)
-            print(data)
-            if len(data) != 0:
-                bot.send_message(message.chat.id, data)
-                bot.send_message(message.chat.id, 'Надеюсь, смог вам помочь!', reply_markup=keyboards.kb_again)
-            else:
-                bot.send_message(message.chat.id, 'К сожалению, я не смог найти объявлений по вашему запросу :(',
-                                 reply_markup=keyboards.kb_again)
-            delete_user_from_json(message.chat.id)
-        else:
-            mes = bot.send_message(message.chat.id, 'Я вас не понял\nДавайте начнём заново?',
-                                   reply_markup=keyboards.kb_again)
-            delete_user_from_json(message.chat.id)
-            bot.register_next_step_handler(mes, again_handler)
-
-
+                mes = bot.send_message(message.chat.id, 'Я вас не понял\nДавайте начнём заново?',
+                                       reply_markup=keyboards.kb_again)
+                delete_user_from_json(message.chat.id)
+                bot.register_next_step_handler(mes, again_handler)
+    else:
+        gif = open(f'gifs/gif_{randint(1, 6)}.mp4', 'rb')
+        bot.send_animation(message.chat.id, gif, reply_markup=keyboards.kb_again)
 
 
 
@@ -227,4 +232,13 @@ def yes_no_handler(message):
     else:
         gif = open(f'gifs/gif_{randint(1, 6)}.mp4', 'rb')
         bot.send_animation(message.chat.id, gif, reply_markup=keyboards.kb_again)
-bot.polling(non_stop=True)
+
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(filename='logs.txt', level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
+
+while True:
+    try:
+        bot.polling(non_stop=True)
+    except Exception as e:
+        logging.error(f"Error occurred: {e}", exc_info=True)
+        sleep(2)
