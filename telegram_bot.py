@@ -12,7 +12,7 @@ import re
 from random import randint
 
 HELLO_MESSAGE = 'Привет!\nЭто бот для поиска попутчиков Буинск - Казань - Буинск. \nЧто вы ищите?'
-ad_channel = 'https://t.me/bmchn'
+ad_channel = 'https://t.me/chilandit'
 
 bot = telebot.TeleBot(TOKEN_TG)
 
@@ -93,7 +93,7 @@ def city_handler(message):
         bot.register_next_step_handler(mes, day_handler)
     elif message.text == 'В Казань':
         update_json(message.chat.id, 'dest', 'в казань')
-        mes = bot.send_message(message.chat.id, 'Отлично! На какой день вам нужна машина?',
+        mes = bot.send_message(message.chat.id, 'Отлично! На какой день вам нужно?',
                                reply_markup=keyboards.kb_day)
         bot.register_next_step_handler(mes, day_handler)
 
